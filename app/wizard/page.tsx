@@ -6,6 +6,7 @@ import { decisionTree } from "@/lib/decision-tree";
 import { isDecisionNode, isProjectDescription } from "@/lib/types";
 import { DecisionCard } from "@/components/DecisionCard";
 import { DocPreview } from "@/components/DocPreview";
+import { encodeState } from "@/lib/url-state";
 import { useRouter } from "next/navigation";
 
 export default function WizardPage() {
@@ -113,9 +114,7 @@ export default function WizardPage() {
                   });
                   if (!res.ok) throw new Error("Failed to create share link");
                   const data = await res.json();
-                  const selections = btoa(
-                    JSON.stringify(state.decisions),
-                  );
+                  const selections = encodeState(state.decisions, state.escapeDecisions);
                   const shareUrl = `${window.location.origin}/share/${data.id}?s=${selections}`;
                   await navigator.clipboard.writeText(shareUrl);
                   alert("Share link copied to clipboard!");

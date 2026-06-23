@@ -57,14 +57,17 @@ export function DecisionCard({ node, state, onSelect, onEscape }: DecisionCardPr
           gap: "var(--space-3)",
         }}
       >
-        {node.options.map((option) => {
+        {node.options.map((option, index) => {
           const isSelected = selectedOption === option.id;
+          // Roving tabindex: when nothing is selected, the first option
+          // is tabbable so keyboard users can enter the radiogroup.
+          const isTabbable = isSelected || (!selectedOption && index === 0);
           return (
             <button
               key={option.id}
               role="radio"
               aria-checked={isSelected}
-              tabIndex={isSelected ? 0 : -1}
+              tabIndex={isTabbable ? 0 : -1}
               className={`option-card${isSelected ? " selected" : ""}`}
               onClick={() => onSelect(node.id, option.id)}
               onKeyDown={(e) => {

@@ -199,9 +199,27 @@ a:hover {
 /* ─── Print Stylesheet (PDF export) ─────────────────────────── */
 
 @media print {
+  /* Override dark-theme CSS variables so printed PDFs are readable */
+  :root {
+    --bg-base: white;
+    --bg-surface: #fafafa;
+    --bg-elevated: #f4f4f5;
+    --bg-input: white;
+
+    --border-subtle: #e4e4e7;
+    --border-default: #d4d4d8;
+
+    --text-primary: #111;
+    --text-secondary: #444;
+    --text-tertiary: #777;
+
+    --accent: #166534;
+    --accent-muted: rgba(22, 101, 52, 0.1);
+  }
+
   body {
     background: white;
-    color: black;
+    color: #111;
   }
 
   .no-print {

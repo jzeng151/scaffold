@@ -1,26 +1,12 @@
-// Spec Forge — POST /api/docs
+// Spec Forge — POST/GET /api/docs
 //
-// Stores project name + description in Vercel KV, returns a short ID.
+// Stores project name + description in a durable KV store (Vercel KV in
+// production, in-memory for development), returns a short ID.
 // The ID is used in share URLs to look up the description.
 // Selections are encoded in the URL query param, not stored here.
 
 import { NextRequest, NextResponse } from "next/server";
-
-// In-memory store for development (no KV configured).
-// In production, this is replaced by Vercel KV.
-const docStore = new Map<string, { projectName: string; description: string; createdAt: number }>();
-
-// Clean up old entries every hour (dev only)
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-function cleanupOldEntries() {
-  const now = Date.now();
-  for (const [key, value] of docStore.entries()) {
-    if (now - value.createdAt > MAX_AGE_MS) {
-      docStore.delete(key);
-    }
-  }
-}
+import { saveDoc, getDoc } from "@/lib/doc-store";
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,19 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate a short ID (8 chars, URL-safe)
-    const id = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-
-    docStore.set(id, {
-      projectName: projectName.slice(0, 200),
-      description: (description ?? "").slice(0, 5000),
-      createdAt: Date.now(),
-    });
-
-    // Periodic cleanup
-    if (docStore.size > 100) {
-      cleanupOldEntries();
-    }
+    const id = await saveDoc(projectName, description ?? "");
 
     return NextResponse.json({ id });
   } catch {
@@ -67,7 +41,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const entry = docStore.get(id);
+  const entry = await getDoc(id);
 
   if (!entry) {
     return NextResponse.json(

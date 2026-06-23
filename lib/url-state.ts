@@ -5,13 +5,21 @@
 
 export interface ShareState {
   decisions: Record<string, string>;
+  escapeDecisions?: string[];
 }
 
 /**
- * Encode decision selections to a URL-safe base64 string.
+ * Encode decision selections (and escape-hatch tracking) to a URL-safe base64 string.
  */
-export function encodeState(decisions: Record<string, string>): string {
-  const json = JSON.stringify(decisions);
+export function encodeState(
+  decisions: Record<string, string>,
+  escapeDecisions?: string[],
+): string {
+  const payload: ShareState = { decisions };
+  if (escapeDecisions && escapeDecisions.length > 0) {
+    payload.escapeDecisions = escapeDecisions;
+  }
+  const json = JSON.stringify(payload);
   // Use Buffer in Node, btoa in browser
   if (typeof window === "undefined") {
     return Buffer.from(json, "utf-8").toString("base64url");
@@ -41,6 +49,18 @@ export function decodeState(encoded: string): ShareState | null {
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return null;
     }
+
+    // New format: { decisions: {...}, escapeDecisions?: [...] }
+    if ("decisions" in parsed && typeof parsed.decisions === "object") {
+      return {
+        decisions: parsed.decisions as Record<string, string>,
+        escapeDecisions: Array.isArray(parsed.escapeDecisions)
+          ? parsed.escapeDecisions
+          : undefined,
+      };
+    }
+
+    // Legacy format: the object itself is the decisions map
     return { decisions: parsed as Record<string, string> };
   } catch {
     return null;

@@ -1,6 +1,9 @@
 import { DocPreview } from "@/components/DocPreview";
 import { decodeState } from "@/lib/url-state";
+import { getDoc } from "@/lib/doc-store";
+import { decisionTree } from "@/lib/decision-tree";
 import type { WizardState } from "@/lib/wizard-state";
+import type { DecisionNode } from "@/lib/types";
 import Link from "next/link";
 
 interface SharedDocContentProps {
@@ -11,33 +14,42 @@ interface SharedDocContentProps {
 type FetchResult =
   | { status: "success"; projectName: string; description: string }
   | { status: "not_found" }
-  | { status: "error" }
-  | { status: "partial"; projectName: string; description: string; missingDecisions: boolean };
+  | { status: "error" };
 
 async function fetchDoc(id: string): Promise<FetchResult> {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"}/api/docs?id=${id}`,
-      { cache: "no-store" },
-    );
+    const entry = await getDoc(id);
 
-    if (res.status === 404) {
+    if (!entry) {
       return { status: "not_found" };
     }
 
-    if (!res.ok) {
-      return { status: "error" };
-    }
-
-    const data = await res.json();
     return {
       status: "success",
-      projectName: data.projectName,
-      description: data.description ?? "",
+      projectName: entry.projectName,
+      description: entry.description ?? "",
     };
   } catch {
     return { status: "error" };
   }
+}
+
+/**
+ * Validate decoded selections against the known decision tree.
+ * Returns false if any node ID or option ID is unrecognized.
+ */
+function validateDecisions(decisions: Record<string, string>): boolean {
+  const decisionNodes = decisionTree.steps.filter(
+    (s): s is DecisionNode => "options" in s,
+  );
+
+  for (const [nodeId, optionId] of Object.entries(decisions)) {
+    const node = decisionNodes.find((n) => n.id === nodeId);
+    if (!node) return false;
+    if (!node.options.some((o) => o.id === optionId)) return false;
+  }
+
+  return true;
 }
 
 export async function SharedDocContent({
@@ -47,10 +59,11 @@ export async function SharedDocContent({
   // Decode selections from URL (available immediately)
   let decisions: Record<string, string> = {};
   let selectionsValid = true;
+  let decoded: ReturnType<typeof decodeState> = null;
 
   if (selectionsParam) {
-    const decoded = decodeState(selectionsParam);
-    if (decoded) {
+    decoded = decodeState(selectionsParam);
+    if (decoded && validateDecisions(decoded.decisions)) {
       decisions = decoded.decisions;
     } else {
       selectionsValid = false;
@@ -151,9 +164,10 @@ export async function SharedDocContent({
 
   const wizardState: WizardState = {
     currentStepIndex: 0,
-    projectName: result.status === "success" ? result.projectName : "",
-    projectDescription: result.status === "success" ? result.description : "",
+    projectName: result.projectName,
+    projectDescription: result.description,
     decisions,
+    escapeDecisions: decoded?.escapeDecisions ?? [],
     isComplete: true,
   };
 

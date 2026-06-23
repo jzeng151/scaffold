@@ -20,6 +20,9 @@ export interface WizardState {
   projectDescription: string;
   /** Map of decision node ID → selected option ID */
   decisions: Record<string, string>;
+  /** Node IDs where the escape hatch ("don't know yet") was used.
+   *  Lets DocPreview distinguish explicit selections from escape defaults. */
+  escapeDecisions: string[];
   /** Whether the wizard is complete (all decisions made) */
   isComplete: boolean;
 }
@@ -29,6 +32,7 @@ export const initialState: WizardState = {
   projectName: "",
   projectDescription: "",
   decisions: {},
+  escapeDecisions: [],
   isComplete: false,
 };
 
@@ -90,6 +94,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       return {
         ...state,
         decisions: { ...state.decisions, [action.nodeId]: action.optionId },
+        escapeDecisions: state.escapeDecisions.filter((n) => n !== action.nodeId),
       };
 
     case "SELECT_ESCAPE": {
@@ -104,6 +109,9 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
             ...state.decisions,
             [action.nodeId]: step.escape.defaultOptionId,
           },
+          escapeDecisions: state.escapeDecisions.includes(action.nodeId)
+            ? state.escapeDecisions
+            : [...state.escapeDecisions, action.nodeId],
         };
       }
       return state;

@@ -3,6 +3,8 @@
 import { decisionTree } from "@/lib/decision-tree";
 import type { WizardState } from "@/lib/wizard-state";
 import { isDecisionNode, isProjectDescription } from "@/lib/types";
+import { ArchitectureDiagram } from "@/components/ArchitectureDiagram";
+import { generateDiagramData } from "@/lib/architecture-diagram-data";
 
 interface DocPreviewProps {
   state: WizardState;
@@ -90,7 +92,7 @@ export function DocPreview({ state, latestNodeId }: DocPreviewProps) {
         }
 
         const option = step.options.find((o) => o.id === selection);
-        const isEscape = option?.id === step.escape.defaultOptionId;
+        const isEscape = state.escapeDecisions?.includes(step.id) ?? false;
 
         return (
           <div
@@ -148,6 +150,25 @@ export function DocPreview({ state, latestNodeId }: DocPreviewProps) {
           </div>
         );
       })}
+
+      {/* Architecture diagram — rendered when at least one decision is made */}
+      {Object.keys(state.decisions).length > 0 && (
+        <div style={{ marginTop: "var(--space-8)" }}>
+          <h3
+            style={{
+              fontSize: "var(--text-sm)",
+              fontWeight: 600,
+              color: "var(--text-tertiary)",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              marginBottom: "var(--space-4)",
+            }}
+          >
+            Architecture
+          </h3>
+          <ArchitectureDiagram data={generateDiagramData(state.decisions)} />
+        </div>
+      )}
     </div>
   );
 }

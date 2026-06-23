@@ -109,21 +109,21 @@ export async function SharedDocContent({
         <p style={{ color: "var(--text-secondary)", marginBottom: "var(--space-8)" }}>
           The server might be temporarily unavailable. Try refreshing the page.
         </p>
-        <button
-          onClick={() => window.location.reload()}
+        <a
+          href={`/share/${id}${selectionsParam ? `?s=${selectionsParam}` : ""}`}
           style={{
+            display: "inline-block",
             padding: "var(--space-2) var(--space-6)",
             background: "var(--bg-surface)",
             border: "1px solid var(--border-default)",
             borderRadius: "var(--radius-md)",
             color: "var(--text-primary)",
             fontWeight: 600,
-            cursor: "pointer",
-            fontFamily: "inherit",
+            textDecoration: "none",
           }}
         >
           Try Again
-        </button>
+        </a>
       </div>
     );
   }

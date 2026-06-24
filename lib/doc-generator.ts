@@ -200,7 +200,9 @@ function generateArchitecturalDesign(state: WizardState): SddSection {
     content: hasDecision("api-design", state.decisions)
       ? state.decisions["api-design"] === "none"
         ? "No API — the app is static / client-side only. All assets are bundled at build time or fetched directly from third-party services in the browser. There is no backend or database layer in the request path."
-        : `Communication pattern: ${getOption("api-design", state.decisions)?.label}. Frontend sends requests to the backend, which queries the database and returns responses.`
+        : (hasDecision("database", state.decisions) && state.decisions.database !== "none")
+          ? `Communication pattern: ${getOption("api-design", state.decisions)?.label}. Frontend sends requests to the backend, which queries the database and returns responses.`
+          : `Communication pattern: ${getOption("api-design", state.decisions)?.label}. Frontend sends requests to the backend, which applies business logic and returns responses. There is no persistent database — state is in-memory, cached, or served from external services.`
       : null,
     fromDecision: "api-design",
   });
@@ -302,7 +304,9 @@ function generateExternalInterfaces(state: WizardState): SddSection {
   subsections.push({
     label: "Network Protocols/Communication",
     content: hasDecision("api-design", state.decisions)
-      ? `${getOption("api-design", state.decisions)?.label} for client-server communication.`
+      ? state.decisions["api-design"] === "none"
+        ? "No client-server communication protocol — the app is static / client-side only. Third-party services are called directly from the browser via HTTPS."
+        : `${getOption("api-design", state.decisions)?.label} for client-server communication.`
       : null,
     fromDecision: "api-design",
   });
@@ -329,7 +333,7 @@ function generateSecurity(state: WizardState): SddSection {
 
   subsections.push({
     label: "Authentication",
-    content: hasDecision("auth-strategy", state.decisions)
+    content: (state.decisions["has-users"] !== "no" && hasDecision("auth-strategy", state.decisions))
       ? `${getOption("auth-strategy", state.decisions)?.label}. ${getOption("auth-strategy", state.decisions)?.explainer}`
       : state.decisions["has-users"] === "no"
         ? "No authentication required — the app is public or single-user."
@@ -348,7 +352,9 @@ function generateSecurity(state: WizardState): SddSection {
   subsections.push({
     label: "Data Protection",
     content: hasDecision("deployment", state.decisions)
-      ? "Use HTTPS everywhere (enforced by your hosting provider). Hash passwords with bcrypt or argon2. Never store plaintext credentials. Use environment variables for secrets."
+      ? state.decisions["has-users"] === "no"
+        ? "Use HTTPS everywhere (enforced by your hosting provider). Use environment variables for secrets."
+        : "Use HTTPS everywhere (enforced by your hosting provider). Hash passwords with bcrypt or argon2. Never store plaintext credentials. Use environment variables for secrets."
       : null,
   });
 
@@ -359,9 +365,11 @@ function generateSecurity(state: WizardState): SddSection {
 
   subsections.push({
     label: "Threat Model",
-    content: hasDecision("auth-strategy", state.decisions)
+    content: (state.decisions["has-users"] !== "no" && hasDecision("auth-strategy", state.decisions))
       ? "Primary threats: credential theft (mitigated by OAuth/hashing), session hijacking (mitigated by secure cookies/JWT expiry), injection attacks (mitigated by parameterized queries)."
-      : null,
+      : state.decisions["has-users"] === "no"
+        ? "Primary threats: cross-site scripting (XSS) mitigated by input sanitization and a strong CSP, supply-chain risk from third-party scripts, and misconfigured cache headers exposing stale data."
+        : null,
     fromDecision: "auth-strategy",
   });
 
@@ -400,7 +408,11 @@ function generatePerformance(state: WizardState): SddSection {
   subsections.push({
     label: "Database Optimization",
     content: hasDecision("database", state.decisions) && state.decisions.database !== "none"
-      ? "Add indexes on frequently queried columns (foreign keys, search fields). Use connection pooling (PgBouncer for PostgreSQL). Monitor slow queries."
+      ? state.decisions.database === "postgresql"
+        ? "Add indexes on frequently queried columns (foreign keys, search fields). Use connection pooling (PgBouncer for PostgreSQL). Monitor slow queries."
+        : state.decisions.database === "mongodb"
+          ? "Create indexes on frequently queried fields. Use the MongoDB query profiler to identify slow queries. Consider read replicas for read-heavy workloads. Use connection pooling via the driver."
+          : "Add indexes on frequently queried columns (SQLite uses partial and expression indexes). For concurrent access, enable WAL mode. Monitor slow queries with EXPLAIN QUERY PLAN."
       : null,
     fromDecision: "database",
   });
@@ -493,9 +505,11 @@ function generateTesting(state: WizardState): SddSection {
   subsections.push({
     label: "Unit Testing",
     content: hasDecision("testing", state.decisions)
-      ? state.decisions.testing === "unit"
-        ? `${getOption("testing", state.decisions)?.label}. Target: 70%+ coverage on business logic and utility functions. Run on every commit.`
-        : "Add unit tests for critical business logic. Target: 70%+ coverage on core functions."
+      ? state.decisions.testing === "manual"
+        ? "Not in scope — the user opted for manual testing only at this stage. Add unit tests as the project matures."
+        : state.decisions.testing === "unit"
+          ? `${getOption("testing", state.decisions)?.label}. Target: 70%+ coverage on business logic and utility functions. Run on every commit.`
+          : "Add unit tests for critical business logic. Target: 70%+ coverage on core functions."
       : null,
     fromDecision: "testing",
   });
@@ -503,16 +517,20 @@ function generateTesting(state: WizardState): SddSection {
   subsections.push({
     label: "Integration Testing",
     content: hasDecision("testing", state.decisions)
-      ? "Test API endpoints and database queries against a test database. Verify request/response cycles work end-to-end."
+      ? state.decisions.testing === "manual"
+        ? "Not in scope — the user opted for manual testing only at this stage."
+        : "Test API endpoints and database queries against a test database. Verify request/response cycles work end-to-end."
       : null,
   });
 
   subsections.push({
     label: "End-to-End Testing",
     content: hasDecision("testing", state.decisions)
-      ? state.decisions.testing === "e2e"
-        ? `${getOption("testing", state.decisions)?.label}. Cover critical user flows: signup, login, core action, logout. Run against a staging environment.`
-        : "Add Playwright E2E tests for critical user flows (signup, payment, core action). Run before each deploy."
+      ? state.decisions.testing === "manual"
+        ? "Not in scope — the user opted for manual testing only at this stage."
+        : state.decisions.testing === "e2e"
+          ? `${getOption("testing", state.decisions)?.label}. Cover critical user flows: signup, login, core action, logout. Run against a staging environment.`
+          : "Add Playwright E2E tests for critical user flows (signup, payment, core action). Run before each deploy."
       : null,
     fromDecision: "testing",
   });

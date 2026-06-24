@@ -9,6 +9,8 @@
 // Uses next/og (Vercel OG) — runs on the Edge runtime.
 
 import { ImageResponse } from "next/og";
+import type { NextRequest } from "next/server";
+import { getDoc } from "@/lib/doc-store";
 
 export const runtime = "edge";
 
@@ -50,10 +52,16 @@ export async function GET(request: NextRequest) {
   let stackLabels: string[] = [];
 
   try {
-    // Decode base64 selections
-    const padded = s.replace(/-/g, "+").replace(/_/g, "/");
-    const json = Buffer.from(padded, "base64").toString("utf-8");
-    const decisions = JSON.parse(json);
+    // Decode base64url selections with Web APIs — the Edge runtime has no
+    // Node `Buffer`. encodeState() wraps the payload as { decisions, ... },
+    // so read .decisions (fall back to the legacy bare-map format).
+    const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4));
+    const parsed = JSON.parse(json);
+    const decisions: Record<string, string> =
+      parsed && typeof parsed === "object" && parsed.decisions
+        ? parsed.decisions
+        : parsed;
 
     // Map decisions to short labels
     const stackMap: Record<string, Record<string, string>> = {
@@ -102,14 +110,12 @@ export async function GET(request: NextRequest) {
     // If decoding fails, show generic card
   }
 
-  // Fetch project name from KV store
+  // Read project name directly from the doc store. This avoids a
+  // self-referential HTTP fetch and removes the dependency on a
+  // NEXT_PUBLIC_BASE_URL env var (which is unset on most deploys).
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/docs?id=${id}`, { cache: "no-store" });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.projectName) projectName = data.projectName;
-    }
+    const entry = await getDoc(id);
+    if (entry?.projectName) projectName = entry.projectName;
   } catch {
     // Name fetch failed — use fallback
   }

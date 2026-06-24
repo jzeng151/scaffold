@@ -27,6 +27,10 @@ export interface SddSubsection {
   content: string | null;
   /** Whether this subsection is derived from a wizard decision */
   fromDecision?: string;
+  /** True when the driving decision was set via the "not sure yet" escape
+   *  hatch. Lets the rendered doc distinguish a recommended default from an
+   *  explicit user choice so uncertain decisions aren't overstated. */
+  isEscape?: boolean;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
@@ -194,7 +198,9 @@ function generateArchitecturalDesign(state: WizardState): SddSection {
   subsections.push({
     label: "Data Flow and Control Flow",
     content: hasDecision("api-design", state.decisions)
-      ? `Communication pattern: ${getOption("api-design", state.decisions)?.label}. Frontend sends requests to the backend, which queries the database and returns responses.`
+      ? state.decisions["api-design"] === "none"
+        ? "No API — the app is static / client-side only. All assets are bundled at build time or fetched directly from third-party services in the browser. There is no backend or database layer in the request path."
+        : `Communication pattern: ${getOption("api-design", state.decisions)?.label}. Frontend sends requests to the backend, which queries the database and returns responses.`
       : null,
     fromDecision: "api-design",
   });
@@ -286,7 +292,8 @@ function generateExternalInterfaces(state: WizardState): SddSection {
 
   subsections.push({
     label: "External APIs",
-    content: hasDecision("auth-strategy", state.decisions) && state.decisions["auth-strategy"] === "oauth"
+    content: state.decisions["has-users"] === "yes" &&
+      state.decisions["auth-strategy"] === "oauth"
       ? "OAuth provider API (Google/GitHub) for authentication. Additional third-party APIs as needed for your domain."
       : null,
     fromDecision: "auth-strategy",
@@ -383,7 +390,9 @@ function generatePerformance(state: WizardState): SddSection {
     content: hasDecision("backend", state.decisions)
       ? state.decisions.backend === "serverless"
         ? "Leverage edge caching via your CDN (Vercel/Cloudflare). Cache static assets indefinitely. Consider Redis for server-side caching of expensive queries."
-        : "Implement server-side caching with Redis or in-memory cache. Cache database query results and computed aggregations."
+        : state.decisions.backend === "static"
+          ? "Pre-render and cache all pages at build time. Serve via a CDN with long-lived, immutable cache headers and content-hash-based filenames. No server-side cache layer is needed."
+          : "Implement server-side caching with Redis or in-memory cache. Cache database query results and computed aggregations."
       : null,
     fromDecision: "backend",
   });
@@ -401,7 +410,9 @@ function generatePerformance(state: WizardState): SddSection {
     content: hasDecision("backend", state.decisions)
       ? state.decisions.backend === "serverless"
         ? "Serverless scales horizontally and automatically. Monitor cold start times. Database will likely be the bottleneck before compute."
-        : "Scale vertically first (bigger server), then horizontally (load balancer + multiple instances). Use a managed database with read replicas for read-heavy workloads."
+        : state.decisions.backend === "static"
+          ? "Static hosting scales to effectively unlimited traffic through CDN edge caching — there is no compute layer to scale, only bandwidth and cache hit rates to monitor."
+          : "Scale vertically first (bigger server), then horizontally (load balancer + multiple instances). Use a managed database with read replicas for read-heavy workloads."
       : null,
     fromDecision: "backend",
   });
@@ -560,7 +571,7 @@ function generateAppendices(state: WizardState): SddSection {
 // ─── Main generator ────────────────────────────────────────────────────
 
 export function generateSdd(state: WizardState): SddSection[] {
-  return [
+  const sections = [
     generateIntroduction(state),
     generateSystemOverview(state),
     generateArchitecturalDesign(state),
@@ -575,4 +586,19 @@ export function generateSdd(state: WizardState): SddSection[] {
     generateTesting(state),
     generateAppendices(state),
   ];
+
+  // Mark subsections driven by an escape-hatch ("don't know yet") decision so
+  // the rendered doc can show them as recommended defaults rather than
+  // explicit choices. This prevents the SDD from overstating uncertain
+  // decisions the user deferred to the wizard's default option.
+  const escapeSet = new Set(state.escapeDecisions ?? []);
+  for (const section of sections) {
+    for (const sub of section.subsections) {
+      if (sub.fromDecision && escapeSet.has(sub.fromDecision)) {
+        sub.isEscape = true;
+      }
+    }
+  }
+
+  return sections;
 }

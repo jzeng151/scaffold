@@ -15,6 +15,13 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  // Required so URL-based metadata (e.g. the relative OG image URLs on the
+  // share page) resolves to absolute URLs at build time. Without it Next.js
+  // emits a build error for relative metadata fields.
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_BASE_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"),
+  ),
   title: "Spec Forge — Design your project before you build it",
   description:
     "A guided wizard that helps you think through engineering decisions before you code. Free, no signup.",

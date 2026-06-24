@@ -14,7 +14,6 @@ interface DocPreviewProps {
 
 export function DocPreview({ state, latestNodeId }: DocPreviewProps) {
   const sections = generateSdd(state);
-  const hasAnyContent = state.projectName || Object.keys(state.decisions).length > 0;
 
   return (
     <div className="doc-content" style={{ padding: "var(--space-8)" }}>
@@ -44,16 +43,6 @@ export function DocPreview({ state, latestNodeId }: DocPreviewProps) {
         </div>
       )}
 
-      {/* ─── Architecture diagram ───────────────────────────── */}
-      {hasAnyContent && (
-        <SddSectionView
-          section={sections[1]} // System Overview contains the diagram reference
-          latestNodeId={latestNodeId}
-          state={state}
-          showDiagram
-        />
-      )}
-
       {/* ─── SDD Sections ───────────────────────────────────── */}
       {sections.map((section) => (
         <SddSectionView
@@ -61,6 +50,7 @@ export function DocPreview({ state, latestNodeId }: DocPreviewProps) {
           section={section}
           latestNodeId={latestNodeId}
           state={state}
+          showDiagram={section.id === "system-overview"}
         />
       ))}
     </div>
@@ -81,13 +71,6 @@ function SddSectionView({ section, latestNodeId, state, showDiagram }: SddSectio
   const isLatest = section.subsections.some(
     (sub) => sub.fromDecision && sub.fromDecision === latestNodeId,
   );
-
-  // Skip auth-related sections if user said no accounts
-  const skipSection =
-    (section.id === "security" && state.decisions["has-users"] === "no") ||
-    false;
-
-  if (skipSection) return null;
 
   if (section.status === "ghost") {
     return (
@@ -138,19 +121,46 @@ function SddSectionView({ section, latestNodeId, state, showDiagram }: SddSectio
                     fontWeight: 600,
                     color: "var(--text-primary)",
                     marginBottom: "var(--space-1)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--space-2)",
                   }}
                 >
                   {sub.label}
+                  {sub.isEscape && (
+                    <span
+                      title='You chose "not sure yet" for this decision — showing the suggested default.'
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        fontWeight: 500,
+                        color: "var(--text-tertiary)",
+                        background: "var(--bg-elevated)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: "var(--radius-sm)",
+                        padding: "1px var(--space-2)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                      }}
+                    >
+                      recommended default
+                    </span>
+                  )}
                 </p>
                 <div
                   style={{
                     fontSize: "var(--text-sm)",
-                    color: "var(--text-secondary)",
+                    color: sub.isEscape ? "var(--text-tertiary)" : "var(--text-secondary)",
+                    fontStyle: sub.isEscape ? "italic" : "normal",
                     lineHeight: 1.6,
                     whiteSpace: "pre-wrap",
                   }}
                 >
                   {sub.content}
+                  {sub.isEscape && (
+                    <span style={{ display: "block", marginTop: "var(--space-1)", fontStyle: "normal", fontSize: "var(--text-xs)" }}>
+                      You deferred this decision ("not sure yet") — the value above is the wizard's suggested default. Review it against your actual requirements.
+                    </span>
+                  )}
                 </div>
               </>
             ) : (

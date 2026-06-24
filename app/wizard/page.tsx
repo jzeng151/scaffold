@@ -152,7 +152,8 @@ export default function WizardPage() {
   return (
     <div
       style={{
-        minHeight: "100vh",
+        height: "100vh",
+        overflow: "hidden",
         display: "flex",
         flexDirection: "column",
         background: "var(--bg-base)",
@@ -291,12 +292,21 @@ export default function WizardPage() {
           className={`panel-decide ${mobileTab === "decide" ? "mobile-visible" : "mobile-hidden"}`}
           style={{
             flex: "1 1 50%",
-            overflowY: "auto",
+            overflow: "hidden",
             borderRight: "1px solid var(--border-subtle)",
             display: "flex",
             flexDirection: "column",
           }}
         >
+          {/* Scrollable content area */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
           {isProjectDescription(currentStep) ? (
             <div
               style={{
@@ -382,8 +392,9 @@ export default function WizardPage() {
               />
             </div>
           ) : null}
+          </div>
 
-          {/* Navigation */}
+          {/* Navigation — pinned to bottom of left panel, always visible */}
           <div
             style={{
               display: "flex",
@@ -391,6 +402,7 @@ export default function WizardPage() {
               padding: "var(--space-4) var(--space-8)",
               borderTop: "1px solid var(--border-subtle)",
               flexShrink: 0,
+              background: "var(--bg-base)",
             }}
           >
             <button
@@ -430,13 +442,13 @@ export default function WizardPage() {
           </div>
         </div>
 
-        {/* Right panel: Doc preview */}
+        {/* Right panel: Doc preview — scrolls independently */}
         <div
           className={`panel-preview ${mobileTab === "preview" ? "mobile-visible" : "mobile-hidden"}`}
           style={{
             flex: "1 1 50%",
             background: "var(--bg-base)",
-            overflow: "hidden",
+            overflowY: "auto",
           }}
         >
           <DocPreview state={state} latestNodeId={latestNodeId} />

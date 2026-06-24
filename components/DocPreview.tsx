@@ -20,8 +20,6 @@ export function DocPreview({ state, latestNodeId }: DocPreviewProps) {
       className="doc-content"
       style={{
         padding: "var(--space-8)",
-        height: "100%",
-        overflowY: "auto",
       }}
     >
       {/* Project header */}

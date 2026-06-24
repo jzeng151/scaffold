@@ -195,15 +195,41 @@ function generateArchitecturalDesign(state: WizardState): SddSection {
     content: stack.length > 0 ? stack.join("\n") : null,
   });
 
+  // Data Flow and Control Flow — branch on api-design, then on whether a
+  // backend/database is actually selected. The wizard doesn't clear those
+  // when api-design=none is chosen, so the none path must not deny layers
+  // the user explicitly kept.
+  let dataFlow: string | null = null;
+  if (hasDecision("api-design", state.decisions)) {
+    const apiLabel = getOption("api-design", state.decisions)?.label;
+    const hasServerBackend =
+      hasDecision("backend", state.decisions) && state.decisions.backend !== "static";
+    const hasDb =
+      hasDecision("database", state.decisions) && state.decisions.database !== "none";
+
+    if (state.decisions["api-design"] === "none") {
+      if (hasServerBackend && hasDb) {
+        dataFlow =
+          "No client-facing API — the app is primarily static/client-side, but the selected backend and database are accessed at build time or server-side (e.g., SSR/ISR) rather than through a runtime API the browser calls directly.";
+      } else if (hasServerBackend) {
+        dataFlow =
+          "No client-facing API — the app is primarily client-side, with the selected backend used for build-time or server-side rendering rather than runtime browser requests.";
+      } else if (hasDb) {
+        dataFlow =
+          "No client-facing API — the app is client-side only, with the selected database accessed at build time (e.g., during static generation) rather than through a runtime query layer.";
+      } else {
+        dataFlow =
+          "No API — the app is static / client-side only. All assets are bundled at build time or fetched directly from third-party services in the browser. There is no backend or database layer in the request path.";
+      }
+    } else if (hasDb) {
+      dataFlow = `Communication pattern: ${apiLabel}. Frontend sends requests to the backend, which queries the database and returns responses.`;
+    } else {
+      dataFlow = `Communication pattern: ${apiLabel}. Frontend sends requests to the backend, which applies business logic and returns responses. There is no persistent database — state is in-memory, cached, or served from external services.`;
+    }
+  }
   subsections.push({
     label: "Data Flow and Control Flow",
-    content: hasDecision("api-design", state.decisions)
-      ? state.decisions["api-design"] === "none"
-        ? "No API — the app is static / client-side only. All assets are bundled at build time or fetched directly from third-party services in the browser. There is no backend or database layer in the request path."
-        : (hasDecision("database", state.decisions) && state.decisions.database !== "none")
-          ? `Communication pattern: ${getOption("api-design", state.decisions)?.label}. Frontend sends requests to the backend, which queries the database and returns responses.`
-          : `Communication pattern: ${getOption("api-design", state.decisions)?.label}. Frontend sends requests to the backend, which applies business logic and returns responses. There is no persistent database — state is in-memory, cached, or served from external services.`
-      : null,
+    content: dataFlow,
     fromDecision: "api-design",
   });
 
@@ -352,7 +378,7 @@ function generateSecurity(state: WizardState): SddSection {
   subsections.push({
     label: "Data Protection",
     content: hasDecision("deployment", state.decisions)
-      ? state.decisions["has-users"] === "no"
+      ? state.decisions["has-users"] === "no" || state.decisions["auth-strategy"] === "oauth"
         ? "Use HTTPS everywhere (enforced by your hosting provider). Use environment variables for secrets."
         : "Use HTTPS everywhere (enforced by your hosting provider). Hash passwords with bcrypt or argon2. Never store plaintext credentials. Use environment variables for secrets."
       : null,
@@ -519,7 +545,9 @@ function generateTesting(state: WizardState): SddSection {
     content: hasDecision("testing", state.decisions)
       ? state.decisions.testing === "manual"
         ? "Not in scope — the user opted for manual testing only at this stage."
-        : "Test API endpoints and database queries against a test database. Verify request/response cycles work end-to-end."
+        : (hasDecision("database", state.decisions) && state.decisions.database !== "none")
+          ? "Test API endpoints and database queries against a test database. Verify request/response cycles work end-to-end."
+          : "Test API endpoints and request/response cycles end-to-end. Since no persistent database is selected, focus on external-service integrations and stateless server logic."
       : null,
   });
 
@@ -529,8 +557,8 @@ function generateTesting(state: WizardState): SddSection {
       ? state.decisions.testing === "manual"
         ? "Not in scope — the user opted for manual testing only at this stage."
         : state.decisions.testing === "e2e"
-          ? `${getOption("testing", state.decisions)?.label}. Cover critical user flows: signup, login, core action, logout. Run against a staging environment.`
-          : "Add Playwright E2E tests for critical user flows (signup, payment, core action). Run before each deploy."
+          ? `${getOption("testing", state.decisions)?.label}. Cover critical user flows${state.decisions["has-users"] === "yes" ? ": signup, login, core action, logout" : ": landing, core action, settings"}. Run against a staging environment.`
+          : `Add Playwright E2E tests for critical user flows${state.decisions["has-users"] === "yes" ? " (signup, core action, logout)" : " (landing, core action, settings)"}. Run before each deploy.`
       : null,
     fromDecision: "testing",
   });

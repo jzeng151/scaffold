@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useWizard } from "@/lib/wizard-state";
 import { decisionTree } from "@/lib/decision-tree";
 import { isDecisionNode, isProjectDescription } from "@/lib/types";
@@ -16,8 +16,12 @@ export default function WizardPage() {
   const [isComplete, setIsComplete] = useState(false);
   const [mobileTab, setMobileTab] = useState<"decide" | "preview">("decide");
   const [previewNotification, setPreviewNotification] = useState(false);
+  const [ariaMessage, setAriaMessage] = useState("");
 
   const { state, currentStep, progress, canGoBack, canGoForward } = wizard;
+
+  // Ref for focus management — moves focus to the question heading on step change
+  const questionRef = useRef<HTMLHeadingElement>(null);
 
   // Track when a new section appears in the doc
   const decisionCount = Object.keys(state.decisions).length;
@@ -28,6 +32,11 @@ export default function WizardPage() {
       if (lastDecision) {
         setLatestNodeId(lastDecision);
         setPreviewNotification(true);
+        // ARIA live announcement
+        const step = decisionTree.steps.find((s) => s.id === lastDecision);
+        if (step && "options" in step) {
+          setAriaMessage(`${step.docSection} section added to your design doc.`);
+        }
         const timer = setTimeout(() => setPreviewNotification(false), 3000);
         return () => clearTimeout(timer);
       }
@@ -40,6 +49,39 @@ export default function WizardPage() {
       setIsComplete(true);
     }
   }, [state.isComplete]);
+
+  // Focus management: move focus to question heading when step changes
+  useEffect(() => {
+    // Small delay to let DOM render the new step
+    const timer = setTimeout(() => {
+      questionRef.current?.focus();
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [state.currentStepIndex]);
+
+  // Keyboard arrow navigation
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      // Only when not focused in an input/textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      if (target.getAttribute("role") === "radio") return;
+
+      if (e.key === "ArrowRight" && canGoForward) {
+        e.preventDefault();
+        wizard.next();
+      } else if (e.key === "ArrowLeft" && canGoBack) {
+        e.preventDefault();
+        wizard.back();
+      }
+    },
+    [canGoForward, canGoBack, wizard],
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   // ─── Completion Screen ─────────────────────────────────────
 
@@ -151,13 +193,21 @@ export default function WizardPage() {
 
   return (
     <div
+      role="application"
+      aria-label="Spec Forge design wizard"
       style={{
-        minHeight: "100vh",
+        height: "100vh",
+        overflow: "hidden",
         display: "flex",
         flexDirection: "column",
         background: "var(--bg-base)",
       }}
     >
+      {/* ARIA live region — announces doc section changes to screen readers */}
+      <div aria-live="polite" aria-atomic="true" style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden" }}>
+        {ariaMessage}
+      </div>
+
       {/* Top bar */}
       <header
         style={{
@@ -291,12 +341,21 @@ export default function WizardPage() {
           className={`panel-decide ${mobileTab === "decide" ? "mobile-visible" : "mobile-hidden"}`}
           style={{
             flex: "1 1 50%",
-            overflowY: "auto",
+            overflow: "hidden",
             borderRight: "1px solid var(--border-subtle)",
             display: "flex",
             flexDirection: "column",
           }}
         >
+          {/* Scrollable content area */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
           {isProjectDescription(currentStep) ? (
             <div
               style={{
@@ -379,11 +438,13 @@ export default function WizardPage() {
                 state={state}
                 onSelect={wizard.selectOption}
                 onEscape={wizard.selectEscape}
+                questionRef={questionRef}
               />
             </div>
           ) : null}
+          </div>
 
-          {/* Navigation */}
+          {/* Navigation — pinned to bottom of left panel, always visible */}
           <div
             style={{
               display: "flex",
@@ -391,6 +452,7 @@ export default function WizardPage() {
               padding: "var(--space-4) var(--space-8)",
               borderTop: "1px solid var(--border-subtle)",
               flexShrink: 0,
+              background: "var(--bg-base)",
             }}
           >
             <button
@@ -430,13 +492,13 @@ export default function WizardPage() {
           </div>
         </div>
 
-        {/* Right panel: Doc preview */}
+        {/* Right panel: Doc preview — scrolls independently */}
         <div
           className={`panel-preview ${mobileTab === "preview" ? "mobile-visible" : "mobile-hidden"}`}
           style={{
             flex: "1 1 50%",
             background: "var(--bg-base)",
-            overflow: "hidden",
+            overflowY: "auto",
           }}
         >
           <DocPreview state={state} latestNodeId={latestNodeId} />

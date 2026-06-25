@@ -1,9 +1,38 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { SharedDocContent } from "./doc-content";
 
 interface SharedDocPageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ s?: string }>;
+}
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: SharedDocPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const { s } = await searchParams;
+  const ogUrl = s
+    ? `/api/og?id=${id}&s=${s}`
+    : `/api/og?id=${id}`;
+
+  return {
+    title: "Design Doc — Spec Forge",
+    description: "A design doc created with Spec Forge. Design your project before you build it.",
+    openGraph: {
+      title: "Design Doc — Spec Forge",
+      description: "A design doc created with Spec Forge. Design your project before you build it.",
+      images: [{ url: ogUrl, width: 1200, height: 630 }],
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Design Doc — Spec Forge",
+      description: "A design doc created with Spec Forge. Design your project before you build it.",
+      images: [ogUrl],
+    },
+  };
 }
 
 export default async function SharedDocPage({

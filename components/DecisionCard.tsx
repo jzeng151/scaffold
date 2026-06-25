@@ -8,9 +8,10 @@ interface DecisionCardProps {
   state: WizardState;
   onSelect: (nodeId: string, optionId: string) => void;
   onEscape: (nodeId: string) => void;
+  questionRef?: React.RefObject<HTMLHeadingElement | null>;
 }
 
-export function DecisionCard({ node, state, onSelect, onEscape }: DecisionCardProps) {
+export function DecisionCard({ node, state, onSelect, onEscape, questionRef }: DecisionCardProps) {
   const selectedOption = state.decisions[node.id];
 
   return (
@@ -27,6 +28,8 @@ export function DecisionCard({ node, state, onSelect, onEscape }: DecisionCardPr
       {/* Question */}
       <div>
         <h2
+          ref={questionRef}
+          tabIndex={-1}
           style={{
             fontSize: "var(--text-xl)",
             fontWeight: 600,
